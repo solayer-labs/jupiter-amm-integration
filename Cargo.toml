@@ -1,0 +1,13 @@
+[package]
+name = "jupiter-amm-integration"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.89"
+jupiter-amm-interface = "0.4.5"
+solana-sdk = "2.0.11"
+spl-token = "6.0.0"
+spl-token-swap = "3.0.0"
