@@ -7,6 +7,7 @@ use jupiter_amm_interface::{
 };
 use solana_sdk::instruction::AccountMeta;
 use solana_sdk::{pubkey, pubkey::Pubkey};
+use spl_associated_token_account::get_associated_token_address;
 use spl_token_swap::solana_program::program_pack::Pack;
 use spl_token_swap::{curve::base::SwapCurve, state::SwapV1};
 
@@ -30,7 +31,7 @@ pub const BONK_AVS_ADDRESS: Pubkey = pubkey!("E2VVTVBeaV8U197Mnvpa9skjaxPDDiHeTp
 pub const ALT_LAYER_AVS_ADDRESS: Pubkey = pubkey!("EBYsvMRRYnjbeGQ91mruwTBx8C4vtC8nUFhCGX4xmgHX");
 
 lazy_static::lazy_static! {
-    pub static ref AVS_MINT_TO_AVS_ADDRESS: HashMap<Pubkey, Pubkey> ={
+    pub static ref AVS_MINT_TO_ENDO_AVS_ADDRESS: HashMap<Pubkey, Pubkey> ={
         let mut m = HashMap::new();
         m.insert(BYBIT_AVS_MINT, BYBIT_AVS_ADDRESS);
         m.insert(OKX_AVS_MINT, OKX_AVS_ADDRESS);
@@ -141,56 +142,57 @@ impl Amm for SolayerEndoAVSAmm {
 
     /// Indicates which Swap has to be performed along with all the necessary account metas
     fn get_swap_and_account_metas(&self, swap_params: &SwapParams) -> Result<SwapAndAccountMetas> {
+
         if swap_params.source_mint == SOLAYER_SOL {
             // delegate sSOL to endoAVS
+            let endo_avs: Pubkey = *AVS_MINT_TO_ENDO_AVS_ADDRESS.get(&swap_params.destination_mint).unwrap();
+            let delegated_token_vault: Pubkey = get_associated_token_address(&endo_avs, &swap_params.source_mint);
             Ok(SwapAndAccountMetas {
                 // TODO: this should be Swap::Solayer
                 swap: Swap::TokenSwap,
                 account_metas: vec![
                     // staker
-                    AccountMeta::new(swap_params.token_transfer_authority, true),
+                    AccountMeta::new_readonly(swap_params.token_transfer_authority, true),
                     // endoAvs
-                    AccountMeta::new(*AVS_MINT_TO_AVS_ADDRESS.get(&swap_params.destination_mint).unwrap(), false),
+                    AccountMeta::new_readonly(endo_avs, false),
                     // avsTokenMint
-                    AccountMeta::new_readonly(swap_params.destination_mint, false),
+                    AccountMeta::new(swap_params.destination_mint, false),
                     // delegatedTokenVault
-                    AccountMeta::new_readonly(swap_params.source_token_account, false),
+                    AccountMeta::new(delegated_token_vault, false),
                     // delegatedTokenMint
                     AccountMeta::new_readonly(swap_params.source_mint, false),
+                    // stakerDelegatedTokenAccount
+                    AccountMeta::new(swap_params.source_token_account, false),
                     // stakerAvsTokenAccount
-                    AccountMeta::new_readonly(swap_params.destination_token_account, false),
+                    AccountMeta::new(swap_params.destination_token_account, false),
                     // tokenProgram
                     AccountMeta::new_readonly(spl_token::id(), false),
-                    // associatedTokenProgram
-                    AccountMeta::new_readonly(spl_associated_token_account::id(), false),
-                    // systemProgram
-                    AccountMeta::new_readonly(solana_system_program::id(), false)
                 ],
             })
         } else {
             // undelegate endoAVS to sSOL
+            let endo_avs: Pubkey = *AVS_MINT_TO_ENDO_AVS_ADDRESS.get(&swap_params.source_mint).unwrap();
+            let delegated_token_vault: Pubkey = get_associated_token_address(&endo_avs, &swap_params.destination_mint);
             Ok(SwapAndAccountMetas {
                 // TODO: this should be Swap::Solayer
                 swap: Swap::TokenSwap,
                 account_metas: vec![
                     // staker
-                    AccountMeta::new(swap_params.token_transfer_authority, true),
+                    AccountMeta::new_readonly(swap_params.token_transfer_authority, true),
                     // endoAvs
-                    AccountMeta::new(*AVS_MINT_TO_AVS_ADDRESS.get(&swap_params.source_mint).unwrap(), false),
+                    AccountMeta::new_readonly(*AVS_MINT_TO_ENDO_AVS_ADDRESS.get(&swap_params.source_mint).unwrap(), false),
                     // avsTokenMint
-                    AccountMeta::new_readonly(swap_params.source_mint, false),
+                    AccountMeta::new(swap_params.source_mint, false),
                     // delegatedTokenVault
-                    AccountMeta::new_readonly(swap_params.destination_token_account, false),
+                    AccountMeta::new(delegated_token_vault, false),
                     // delegatedTokenMint
                     AccountMeta::new_readonly(swap_params.destination_mint, false),
+                    // stakerDelegatedTokenAccount
+                    AccountMeta::new(swap_params.destination_token_account, false),
                     // stakerAvsTokenAccount
-                    AccountMeta::new_readonly(swap_params.source_token_account, false),
+                    AccountMeta::new(swap_params.source_token_account, false),
                     // tokenProgram
                     AccountMeta::new_readonly(spl_token::id(), false),
-                    // associatedTokenProgram
-                    AccountMeta::new_readonly(spl_associated_token_account::id(), false),
-                    // systemProgram
-                    AccountMeta::new_readonly(solana_system_program::id(), false)
                 ],
             })
         }
